@@ -207,8 +207,8 @@ public class DayView extends View implements View.OnCreateContextMenuListener,
         @Override
         public void run() {
             String tz = Utils.getTimeZone(mContext, this);
-            mBaseDate.timezone = tz;
-            mBaseDate.normalize(true);
+            mBaseDate.setTimezone(tz);
+            mBaseDate.normalize();
             mCurrentTime.switchTimezone(tz);
             invalidate();
         }
@@ -820,7 +820,7 @@ public class DayView extends View implements View.OnCreateContextMenuListener,
         mCurrentTime = new Time(Utils.getTimeZone(context, mTZUpdater));
         long currentTime = System.currentTimeMillis();
         mCurrentTime.set(currentTime);
-        mTodayJulianDay = Time.getJulianDay(currentTime, mCurrentTime.gmtoff);
+        mTodayJulianDay = Time.getJulianDay(currentTime, mCurrentTime.getGmtOffset());
 
         mWeek_todayColor = DynamicTheme.getColor(mContext, "week_today");
         mWeek_saturdayColor = DynamicTheme.getColor(mContext, "week_saturday");
@@ -962,35 +962,26 @@ public class DayView extends View implements View.OnCreateContextMenuListener,
     long getSelectedTimeInMillis() {
         Time time = new Time(mBaseDate);
         time.setJulianDay(mSelectionDay);
-        time.hour = mSelectionHour;
+        time.setHour(mSelectionHour);
 
-        // We ignore the "isDst" field because we want normalize() to figure
-        // out the correct DST value and not adjust the selected time based
-        // on the current setting of DST.
-        return time.normalize(true /* ignore isDst */);
+        return time.normalize();
     }
 
     Time getSelectedTime() {
         Time time = new Time(mBaseDate);
         time.setJulianDay(mSelectionDay);
-        time.hour = mSelectionHour;
+        time.setHour(mSelectionHour);
 
-        // We ignore the "isDst" field because we want normalize() to figure
-        // out the correct DST value and not adjust the selected time based
-        // on the current setting of DST.
-        time.normalize(true /* ignore isDst */);
+        time.normalize();
         return time;
     }
 
     Time getSelectedTimeForAccessibility() {
         Time time = new Time(mBaseDate);
         time.setJulianDay(mSelectionDayForAccessibility);
-        time.hour = mSelectionHourForAccessibility;
+        time.setHour(mSelectionHourForAccessibility);
 
-        // We ignore the "isDst" field because we want normalize() to figure
-        // out the correct DST value and not adjust the selected time based
-        // on the current setting of DST.
-        time.normalize(true /* ignore isDst */);
+        time.normalize();
         return time;
     }
 
@@ -1014,11 +1005,11 @@ public class DayView extends View implements View.OnCreateContextMenuListener,
 
     public void setSelected(Time time, boolean ignoreTime, boolean animateToday) {
         mBaseDate.set(time);
-        setSelectedHour(mBaseDate.hour);
+        setSelectedHour(mBaseDate.getHour());
         setSelectedEvent(null);
         mPrevSelectedEvent = null;
-        long millis = mBaseDate.toMillis(false /* use isDst */);
-        setSelectedDay(Time.getJulianDay(millis, mBaseDate.gmtoff));
+        long millis = mBaseDate.toMillis();
+        setSelectedDay(Time.getJulianDay(millis, mBaseDate.getGmtOffset()));
         mSelectedEvents.clear();
         mComputeSelectedEvents = true;
 
@@ -1027,20 +1018,20 @@ public class DayView extends View implements View.OnCreateContextMenuListener,
         if (!ignoreTime && mGridAreaHeight != -1) {
             int lastHour = 0;
 
-            if (mBaseDate.hour < mFirstHour) {
+            if (mBaseDate.getHour() < mFirstHour) {
                 // Above visible region
-                gotoY = mBaseDate.hour * (mCellHeight + HOUR_GAP);
+                gotoY = mBaseDate.getHour() * (mCellHeight + HOUR_GAP);
             } else {
                 lastHour = (mGridAreaHeight - mFirstHourOffset) / (mCellHeight + HOUR_GAP)
                         + mFirstHour;
 
-                if (mBaseDate.hour >= lastHour) {
+                if (mBaseDate.getHour() >= lastHour) {
                     // Below visible region
 
                     // target hour + 1 (to give it room to see the event) -
                     // grid height (to get the y of the top of the visible
                     // region)
-                    gotoY = (int) ((mBaseDate.hour + 1 + mBaseDate.minute / 60.0f)
+                    gotoY = (int) ((mBaseDate.getHour() + 1 + mBaseDate.getMinute() / 60.0f)
                             * (mCellHeight + HOUR_GAP) - mGridAreaHeight);
                 }
             }
@@ -1119,23 +1110,19 @@ public class DayView extends View implements View.OnCreateContextMenuListener,
     public Time getSelectedDay() {
         Time time = new Time(mBaseDate);
         time.setJulianDay(mSelectionDay);
-        time.hour = mSelectionHour;
-
-        // We ignore the "isDst" field because we want normalize() to figure
-        // out the correct DST value and not adjust the selected time based
-        // on the current setting of DST.
-        time.normalize(true /* ignore isDst */);
+        time.setHour(mSelectionHour);
+        time.normalize();
         return time;
     }
 
     public void updateTitle() {
         Time start = new Time(mBaseDate);
-        start.normalize(true);
+        start.normalize();
         Time end = new Time(start);
-        end.monthDay += mNumDays - 1;
+        end.setDay(end.getDay() + mNumDays - 1);
         // Move it forward one minute so the formatter doesn't lose a day
-        end.minute += 1;
-        end.normalize(true);
+        end.setMinute(end.getMinute() + 1);
+        end.normalize();
 
         long formatFlags = DateUtils.FORMAT_SHOW_DATE | DateUtils.FORMAT_SHOW_YEAR;
         if (mNumDays != 1) {
@@ -1143,7 +1130,7 @@ public class DayView extends View implements View.OnCreateContextMenuListener,
             formatFlags |= DateUtils.FORMAT_NO_MONTH_DAY;
 
             // Abbreviate the month if showing multiple months
-            if (start.month != end.month) {
+            if (start.getMonth() != end.getMonth()) {
                 formatFlags |= DateUtils.FORMAT_ABBREV_MONTH;
             }
         }
@@ -1159,13 +1146,13 @@ public class DayView extends View implements View.OnCreateContextMenuListener,
      */
     public int compareToVisibleTimeRange(Time time) {
 
-        int savedHour = mBaseDate.hour;
-        int savedMinute = mBaseDate.minute;
-        int savedSec = mBaseDate.second;
+        int savedHour = mBaseDate.getHour();
+        int savedMinute = mBaseDate.getMinute();
+        int savedSec = mBaseDate.getSecond();
 
-        mBaseDate.hour = 0;
-        mBaseDate.minute = 0;
-        mBaseDate.second = 0;
+        mBaseDate.setHour(0);
+        mBaseDate.setMinute(0);
+        mBaseDate.setSecond(0);
 
         if (DEBUG) {
             Log.d(TAG, "Begin " + mBaseDate.toString());
@@ -1173,17 +1160,17 @@ public class DayView extends View implements View.OnCreateContextMenuListener,
         }
 
         // Compare beginning of range
-        int diff = Time.compare(time, mBaseDate);
+        int diff = time.compareTo(mBaseDate);
         if (diff > 0) {
             // Compare end of range
-            mBaseDate.monthDay += mNumDays;
-            mBaseDate.normalize(true);
-            diff = Time.compare(time, mBaseDate);
+            mBaseDate.setDay(mBaseDate.getDay() + mNumDays);
+            mBaseDate.normalize();
+            diff = time.compareTo(mBaseDate);
 
             if (DEBUG) Log.d(TAG, "End   " + mBaseDate.toString());
 
-            mBaseDate.monthDay -= mNumDays;
-            mBaseDate.normalize(true);
+            mBaseDate.setDay(mBaseDate.getDay() - mNumDays);
+            mBaseDate.normalize();
             if (diff < 0) {
                 // in visible time
                 diff = 0;
@@ -1195,9 +1182,9 @@ public class DayView extends View implements View.OnCreateContextMenuListener,
 
         if (DEBUG) Log.d(TAG, "Diff: " + diff);
 
-        mBaseDate.hour = savedHour;
-        mBaseDate.minute = savedMinute;
-        mBaseDate.second = savedSec;
+        mBaseDate.setHour(savedHour);
+        mBaseDate.setMinute(savedMinute);
+        mBaseDate.setSecond(savedSec);
         return diff;
     }
 
@@ -1208,17 +1195,17 @@ public class DayView extends View implements View.OnCreateContextMenuListener,
             adjustToBeginningOfWeek(mBaseDate);
         }
 
-        final long start = mBaseDate.toMillis(false /* use isDst */);
-        mFirstJulianDay = Time.getJulianDay(start, mBaseDate.gmtoff);
+        final long start = mBaseDate.toMillis();
+        mFirstJulianDay = Time.getJulianDay(start, mBaseDate.getGmtOffset());
         mLastJulianDay = mFirstJulianDay + mNumDays - 1;
 
         mMonthLength = mBaseDate.getActualMaximum(Time.MONTH_DAY);
-        mFirstVisibleDate = mBaseDate.monthDay;
-        mFirstVisibleDayOfWeek = mBaseDate.weekDay;
+        mFirstVisibleDate = mBaseDate.getDay();
+        mFirstVisibleDayOfWeek = mBaseDate.getWeekDay();
     }
 
     private void adjustToBeginningOfWeek(Time time) {
-        int dayOfWeek = time.weekDay;
+        int dayOfWeek = time.getWeekDay();
         // Avoid zero when Sunday is selected as the start day of the week.
         if (mFirstDayOfWeek == 0) {
             mFirstDayOfWeek = 7;
@@ -1228,8 +1215,8 @@ public class DayView extends View implements View.OnCreateContextMenuListener,
             if (diff < 0) {
                 diff += 7;
             }
-            time.monthDay -= diff;
-            time.normalize(true /* ignore isDst */);
+            time.setDay(time.getDay() - diff);
+            time.normalize();
         }
     }
 
@@ -1647,24 +1634,24 @@ public class DayView extends View implements View.OnCreateContextMenuListener,
             Time date = view.mBaseDate;
             date.set(mBaseDate);
             if (selectionDay < mFirstJulianDay) {
-                date.monthDay -= mNumDays;
+                date.setDay(date.getDay() - mNumDays);
             } else {
-                date.monthDay += mNumDays;
+                date.setDay(date.getDay() + mNumDays);
             }
-            date.normalize(true /* ignore isDst */);
+            date.normalize();
             view.setSelectedDay(selectionDay);
 
             initView(view);
 
             Time end = new Time(date);
-            end.monthDay += mNumDays - 1;
+            end.setDay(end.getDay() + mNumDays - 1);
             mController.sendEvent(this, EventType.GO_TO, date, end, -1, ViewType.CURRENT);
             return true;
         }
         if (mSelectionDay != selectionDay) {
             Time date = new Time(mBaseDate);
             date.setJulianDay(selectionDay);
-            date.hour = mSelectionHour;
+            date.setHour(mSelectionHour);
             mController.sendEvent(this, EventType.GO_TO, date, date, -1, ViewType.CURRENT);
         }
         setSelectedDay(selectionDay);
@@ -1732,10 +1719,10 @@ public class DayView extends View implements View.OnCreateContextMenuListener,
 
             // Announce only the changes i.e. day or hour or both
             if (dayChanged) {
-                b.append(getSelectedTimeForAccessibility().format("%A "));
+                b.append(getSelectedTimeForAccessibility().format());
             }
             if (hourChanged) {
-                b.append(getSelectedTimeForAccessibility().format(mIs24HourFormat ? "%k" : "%l%p"));
+                b.append(getSelectedTimeForAccessibility().format());
             }
             if (dayChanged || hourChanged) {
                 b.append(PERIOD_SPACE);
@@ -1867,14 +1854,14 @@ public class DayView extends View implements View.OnCreateContextMenuListener,
             outToXValue = 1.0f;
         }
 
-        final Time start = new Time(mBaseDate.timezone);
+        final Time start = new Time(mBaseDate.getTimezone());
         start.set(mController.getTime());
         if (forward) {
-            start.monthDay += mNumDays;
+            start.setDay(start.getDay() + mNumDays);
         } else {
-            start.monthDay -= mNumDays;
+            start.setDay(start.getDay() - mNumDays);
         }
-        mController.setTime(start.normalize(true));
+        mController.setTime(start.normalize());
 
         Time newSelected = start;
 
@@ -1884,7 +1871,7 @@ public class DayView extends View implements View.OnCreateContextMenuListener,
         }
 
         final Time end = new Time(start);
-        end.monthDay += mNumDays - 1;
+        end.setDay(end.getDay() + mNumDays - 1);
 
         // We have to allocate these animation objects each time we switch views
         // because that is the only way to set the animation parameters.
@@ -2033,11 +2020,11 @@ public class DayView extends View implements View.OnCreateContextMenuListener,
         if (mFirstDayOfWeek == 0) {
             mFirstDayOfWeek = 7;
         }
-        weekStart.weekDay = mFirstDayOfWeek;
-        weekStart.hour = 0;
-        weekStart.minute = 0;
-        weekStart.second = 0;
-        long millis = weekStart.normalize(true /* ignore isDst */);
+        weekStart.setDay(mFirstDayOfWeek);
+        weekStart.setHour(0);
+        weekStart.setMinute(0);
+        weekStart.setSecond(0);
+        long millis = weekStart.normalize();
 
         // Avoid reloading events unnecessarily.
         if (millis == mLastReloadMillis) {
@@ -2460,8 +2447,8 @@ public class DayView extends View implements View.OnCreateContextMenuListener,
             drawEvents(cell, day, HOUR_GAP, canvas, p);
             // If this is today
             if (cell == mTodayJulianDay) {
-                int lineY = mCurrentTime.hour * (mCellHeight + HOUR_GAP)
-                        + ((mCurrentTime.minute * mCellHeight) / 60) + 1;
+                int lineY = mCurrentTime.getHour() * (mCellHeight + HOUR_GAP)
+                        + ((mCurrentTime.getMinute() * mCellHeight) / 60) + 1;
 
                 // And the current time shows up somewhere on the screen
                 if (lineY >= mViewStartY && lineY < mViewStartY + mViewHeight - 2) {
@@ -2585,8 +2572,8 @@ public class DayView extends View implements View.OnCreateContextMenuListener,
             // To show the lunar info.
             if (LunarUtils.showLunar(mContext)) {
                 // adjust the year and month
-                int month = mBaseDate.month;
-                int year = mBaseDate.year;
+                int month = mBaseDate.getMonth();
+                int year = mBaseDate.getYear();
                 if (dateNum > mMonthLength || dateNum < mFirstVisibleDate) {
                     month = month + 1;
                     if (month > 11) {
@@ -2686,8 +2673,8 @@ public class DayView extends View implements View.OnCreateContextMenuListener,
         // Draw background for grid area
         if (mNumDays == 1 && todayIndex == 0) {
             // Draw a white background for the time later than current time
-            int lineY = mCurrentTime.hour * (mCellHeight + HOUR_GAP)
-                    + ((mCurrentTime.minute * mCellHeight) / 60) + 1;
+            int lineY = mCurrentTime.getHour() * (mCellHeight + HOUR_GAP)
+                    + ((mCurrentTime.getMinute() * mCellHeight) / 60) + 1;
             if (lineY < mViewStartY + mViewHeight) {
                 lineY = Math.max(lineY, mViewStartY);
                 r.left = mHoursWidth;
@@ -2699,8 +2686,8 @@ public class DayView extends View implements View.OnCreateContextMenuListener,
             }
         } else if (todayIndex >= 0 && todayIndex < mNumDays) {
             // Draw today with a white background for the time later than current time
-            int lineY = mCurrentTime.hour * (mCellHeight + HOUR_GAP)
-                    + ((mCurrentTime.minute * mCellHeight) / 60) + 1;
+            int lineY = mCurrentTime.getHour() * (mCellHeight + HOUR_GAP)
+                    + ((mCurrentTime.getMinute() * mCellHeight) / 60) + 1;
             if (lineY < mViewStartY + mViewHeight) {
                 lineY = Math.max(lineY, mViewStartY);
                 r.left = computeDayLeftPosition(todayIndex) + 1;
@@ -3914,8 +3901,8 @@ public class DayView extends View implements View.OnCreateContextMenuListener,
             if (y < DAY_HEADER_HEIGHT) {
                 Time selectedTime = new Time(mBaseDate);
                 selectedTime.setJulianDay(mSelectionDay);
-                selectedTime.hour = mSelectionHour;
-                selectedTime.normalize(true /* ignore isDst */);
+                selectedTime.setHour(mSelectionHour);
+                selectedTime.normalize();
                 mController.sendEvent(this, EventType.GO_TO, null, null, selectedTime, -1,
                         ViewType.DAY, CalendarController.EXTRA_GOTO_DATE, null, null);
             }
@@ -3964,11 +3951,11 @@ public class DayView extends View implements View.OnCreateContextMenuListener,
             // Select time
             Time startTime = new Time(mBaseDate);
             startTime.setJulianDay(mSelectionDay);
-            startTime.hour = mSelectionHour;
-            startTime.normalize(true /* ignore isDst */);
+            startTime.setHour(mSelectionHour);
+            startTime.normalize();
 
             Time endTime = new Time(startTime);
-            endTime.hour++;
+            endTime.setHour(endTime.getHour() + 1);
 
             mSelectionMode = SELECTION_SELECTED;
             mController.sendEvent(this, EventType.GO_TO, startTime, endTime, -1, ViewType.CURRENT,
@@ -4184,15 +4171,15 @@ public class DayView extends View implements View.OnCreateContextMenuListener,
         date.set(mBaseDate);
         boolean switchForward;
         if (deltaX > 0) {
-            date.monthDay -= mNumDays;
+            date.setDay(date.getDay() - mNumDays);
             view.setSelectedDay(mSelectionDay - mNumDays);
             switchForward = false;
         } else {
-            date.monthDay += mNumDays;
+            date.setDay(date.getDay() + mNumDays);
             view.setSelectedDay(mSelectionDay + mNumDays);
             switchForward = true;
         }
-        date.normalize(true /* ignore isDst */);
+        date.normalize();
         initView(view);
         view.layout(getLeft(), getTop(), getRight(), getBottom());
         view.reloadEvents();
@@ -4924,7 +4911,7 @@ public class DayView extends View implements View.OnCreateContextMenuListener,
                 mHandler.postDelayed(mUpdateCurrentTime, UPDATE_CURRENT_TIME_DELAY
                         - (currentTime % UPDATE_CURRENT_TIME_DELAY));
             }
-            mTodayJulianDay = Time.getJulianDay(currentTime, mCurrentTime.gmtoff);
+            mTodayJulianDay = Time.getJulianDay(currentTime, mCurrentTime.getGmtOffset());
             invalidate();
         }
     }
